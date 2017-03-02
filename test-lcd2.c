@@ -42,34 +42,34 @@ const unsigned char str1[] = ">> at328-5.c hi <<901234";
 const unsigned char str2[] = ">> USC EE459L <<78901234";
 
 #define LCD_RS_B          0x80
-#define LCD_E_D           0x20
+#define LCD_E_B           0x01
 
-#define LCD_Data_D     0xc0     // Bits in Port D for LCD data
-#define LCD_Data_B     0x03     // Bits in Port B for LCD data
+#define LCD_Data_D     0xf0     // Bits in Port D for LCD data
 
 int main(void) {
     unsigned char one = 1;
 
     DDRD |= LCD_Data_D;         // Set PORTD bits 6-7 for output
-    DDRB |= LCD_Data_B;			// Set PORTB bits 0-1 for output
     
 	DDRB |= LCD_RS_B;
-	DDRD |= LCD_E_D;
+	DDRB |= LCD_E_B;
 
+	
     initialize();               // Initialize the LCD display
 
-    cmdout(1);
+    //cmdout(1);
     
-    //strout(0, (unsigned char *) str1);    // Print string on line 1
+    strout(0, (unsigned char *) str1);    // Print string on line 1
 
     //strout(0x40, (unsigned char *) str2); // Print string on line 2
 
-	datout(0x41);
+	//datout(0x41);
 	
     while (one) {               // Loop forever
     	
-    	//datout(0x42);
-    	//_delay_us(10);
+    	/*datout(0x41);
+    	_delay_ms(10);*/
+    	
     }
 
     return 0;   /* never reached */
@@ -96,7 +96,7 @@ void strout(int x, unsigned char *s)
 */
 void datout(unsigned char x)
 {
-    PORTD &= ~(LCD_E_D);   // Set R/W=0, E=0, RS=1
+    PORTB &= ~(LCD_E_B);   //E=0, RS=1
     PORTB |= LCD_RS_B;
     nibout(x);
     nibout(x << 4);
@@ -108,7 +108,7 @@ void datout(unsigned char x)
 */
 void cmdout(unsigned char x)
 {
-    PORTD &= ~LCD_E_D;         // Set R/W=0, E=0, RS=0
+    PORTB &= ~LCD_E_B;         // Set R/W=0, E=0, RS=0
     PORTB &= ~LCD_RS_B;
     nibout(x);
     nibout(x << 4);
@@ -122,18 +122,11 @@ void cmdout(unsigned char x)
 */
 void nibout(unsigned char x)
 {
-	unsigned char temp1 = x;
-	unsigned char temp2 = x;
-	unsigned char x1 = temp1 << 2;
-	unsigned char x2 = temp2 >> 6;
-    PORTD |= (x1 & LCD_Data_D);  // Put high 4 bits of data in PORTD
-    PORTD &= (x1 | ~LCD_Data_D);
-    
-    PORTB |= (x2 & LCD_Data_B);  // Put low 2 bits of data in PORTB
-    PORTB &= (x2 | ~LCD_Data_B);
+    PORTD |= (x & LCD_Data_D);  // Put high 4 bits of data in PORTD
+    PORTD &= (x | ~LCD_Data_D);
 
-    PORTD |= LCD_E_D;             // Set E to 1
-    PORTD &= ~LCD_E_D;            // Set E to 0
+    PORTB |= LCD_E_B;             // Set E to 1
+    PORTB &= ~LCD_E_B;            // Set E to 0
 }
 
 /*
