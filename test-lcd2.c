@@ -57,18 +57,18 @@ int main(void) {
 	
     initialize();               // Initialize the LCD display
 
-    //cmdout(1);
+    cmdout(1);
     
     strout(0, (unsigned char *) str1);    // Print string on line 1
 
-    //strout(0x40, (unsigned char *) str2); // Print string on line 2
+    strout(0x40, (unsigned char *) str2); // Print string on line 2
 
 	//datout(0x41);
 	
     while (one) {               // Loop forever
     	
-    	/*datout(0x41);
-    	_delay_ms(10);*/
+    	//datout(0x41);
+    	//_delay_ms(10);
     	
     }
 
@@ -147,6 +147,7 @@ void initialize()
     nibout(0x30);       // Send a 0x30
 
     nibout(0x20);         // Function Set: 4-bit interface
+    _delay_ms(2);
     
     cmdout(0x28);         // Function Set: 4-bit interface, 2 lines
 
