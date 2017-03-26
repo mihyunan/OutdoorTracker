@@ -48,6 +48,12 @@ void tx_char(char ch)
 	UDR0 = ch;
 }
 
+void init_buttons() 
+{
+	PORTC |= (1 << PC1) | (1 << PC2) | (1 << PC3) | (1 << PC4);
+	PCICR |= (1 << PCIE1);
+}
+
 void parse_gps()
 {
 	//unsigned char temp_buf[150];
@@ -196,5 +202,10 @@ ISR(USART_RX_vect)
 		gps_data[count] = temp_recv;
 		count++;
 	}
+	
+}
+
+ISR(PCINT1_vect)
+{
 	
 }
