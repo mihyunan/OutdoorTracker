@@ -51,7 +51,8 @@ void tx_char(char ch)
 void init_buttons() 
 {
 	PORTC |= (1 << PC1) | (1 << PC2) | (1 << PC3) | (1 << PC4);
-	PCICR |= (1 << PCIE1);
+	PCICR |= (1 << PCIE1); //enabling pin change interrupts on Port C
+	PCMSK1  |= ( (1 << PCINT12) | (1 << PCINT11) | (1 << PCINT10) | (1 << PCINT9) );	//setting bits in mask register
 }
 
 void parse_gps()
