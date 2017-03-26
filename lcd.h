@@ -7,3 +7,4 @@ void cmdout(unsigned char);
 void datout(unsigned char);
 void nibout(unsigned char);
 void moveto(unsigned char pos);
+void init_setting(void);

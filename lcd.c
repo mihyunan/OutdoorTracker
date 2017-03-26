@@ -21,6 +21,12 @@
 
 #define LCD_Data_D     0xf0     // Bits in Port D for LCD data
 
+const unsigned char dist[] = "DIST:";
+const unsigned char find[] = "FIND ";
+const unsigned char msg1[] = "In Danger";
+const unsigned char msg2[] = "I'm Fine";
+const unsigned char msg3[] = "Wait!";
+
 /*
   strout - Print the contents of the character string "s" starting at LCD
   RAM location "x".  The string must be terminated by a zero byte.
@@ -103,4 +109,13 @@ void initialize()
     cmdout(0x28);         // Function Set: 4-bit interface, 2 lines
 
     cmdout(0x0f);         // Display and cursor on
+}
+
+void init_setting(void)
+{
+	strout(0, (unsigned char *) dist);
+	strout(0x0A, (unsigned char*) find);
+	strout(0x4B, (unsigned char*) msg1);
+	strout(0x1F, (unsigned char*) msg2);
+	strout(0x5F, (unsigned char*) msg3);
 }
