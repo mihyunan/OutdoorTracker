@@ -3,6 +3,7 @@
 #include <avr/interrupt.h>
 #include "lcd.h"
 #include <math.h>
+#include <stdlib.h>
 
 #define FOSC 7372800
 #define BAUD 9600
@@ -14,6 +15,7 @@ volatile unsigned int count = 0;
 volatile unsigned char gps_data[150];
 unsigned char latitude[15];
 unsigned char longitude[15];
+char lat_c[50], long_c[50];
 float latitude_f, longitude_f;
 unsigned char direction[3];
 //strings to test lcd
@@ -23,7 +25,7 @@ const unsigned char str2[] = ">> USC EE459L <<78901234";
 const unsigned char lat[] = "LAT:";
 const unsigned char lon[] = "LONG:";
 const unsigned char dir[] = "DIR:";
-const unsigned char dist[] = "DIST:";
+const unsigned char dist_c[] = "DIST:";
 
 
 /*
@@ -33,6 +35,7 @@ void strout(int, unsigned char *);
 void cmdout(unsigned char);
 void datout(unsigned char);
 void nibout(unsigned char); */
+
 
 // receives a character
 char rx_char()
@@ -48,19 +51,13 @@ void tx_char(char ch)
 	UDR0 = ch;
 }
 
-void init_buttons() 
-{
-	PORTC |= (1 << PC1) | (1 << PC2) | (1 << PC3) | (1 << PC4);
-	PCICR |= (1 << PCIE1); //enabling pin change interrupts on Port C
-	PCMSK1  |= ( (1 << PCINT12) | (1 << PCINT11) | (1 << PCINT10) | (1 << PCINT9) );	//setting bits in mask register
-}
-
 void parse_gps()
 {
 	//unsigned char temp_buf[150];
 	int i=0;
 	int k=0;
-	
+	int temp1;
+	float temp2;
 	while (gps_data[i] != '$') {
 		i++;
 	}
@@ -73,20 +70,38 @@ void parse_gps()
 		}
 		i += 3;
 		latitude[k] = '\0';
-		latitude_f = atof(latitude);
+		temp1 = atof(latitude) / 100;
+		temp2 = (atof(latitude) - temp1*100) / 60;
+		latitude_f = temp1 + temp2;
+		//temp2 = temp1 - (int)(temp1/100);
+		//latitude_f = (int)(temp1/100) + temp2/60;
+
+
 		k = 0;
 		
 		while (gps_data[i] != ',') {
 			longitude[k++] = gps_data[i++];
 		}
 		longitude[k] = '\0';
-		longitude_f = atof(longitude);
+
+		//strncpy(temp2, longitude+3, k-3);
+		//temp2_f = atof(temp2);
+		//longitude_f = atof(longitude[0]) * 100 + atof(longitude[1]) * 10 + atof(longitude[2]) + temp2_f / 60;
+		//longitude_f = atoi(longitude[0]) * 100 + atoi(longitude[1]) * 10 + atoi(longitude[2]);
+		//longitude_f = atof(longitude) / 100;
+		//temp2 = temp1 - (int)(temp1/100);
+		//longitude_f = (int)(temp1/100) + temp2/60;
+		temp1 = atof(longitude) / 100;
+		temp2 = (atof(longitude) - temp1*100) / 60;
+		longitude_f = temp1 + temp2;
 	}
 }
 
+
 void find_direction(double peer_latitude, double peer_longitude)
-{
+{ // 40 90 34 118
 	if (peer_latitude > latitude_f)
+	{
 		if (peer_longitude > longitude_f)
 		{
 			direction[0]= 'N';
@@ -97,7 +112,9 @@ void find_direction(double peer_latitude, double peer_longitude)
 			direction[0]= 'N';
 			direction[1]= 'E';
 		}
+	}
 	else
+	{
 		if (peer_longitude > longitude_f)
 		{
 			direction[0]= 'S';
@@ -108,11 +125,27 @@ void find_direction(double peer_latitude, double peer_longitude)
 			direction[0]= 'S';
 			direction[1]= 'E';
 		}
-
-			direction[2]= '\0';
+	}
+	direction[2]= '\0';
 }
-
-
+/*
+void find_direction()
+{ // 40 90 34 118
+	if (latitude_f < 40)
+	{
+		if (longitude_f > 90)
+		{
+			direction[0]= 'N';
+			direction[1]= 'E';
+		}
+		else 
+		{
+			direction[0]= 'N';
+			direction[1]= 'W';
+		}
+	}
+	else
+*/
 
 /*:::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::*/
 /*::  Function prototypes                                           :*/
@@ -120,16 +153,16 @@ void find_direction(double peer_latitude, double peer_longitude)
 double deg2rad(double);
 double rad2deg(double);
 
-double find_distance(double lat1, double lon1, double lat2, double lon2) {
-  double theta, dist;
-  theta = lon1 - lon2;
-  dist = sin(deg2rad(lat1)) * sin(deg2rad(lat2)) + cos(deg2rad(lat1)) * cos(deg2rad(lat2)) * cos(deg2rad(theta));
-  dist = acos(dist);
-  dist = rad2deg(dist);
-  dist = dist * 60 * 1.1515;
-  dist = dist * 1.609344; // Dist in KM
- 
-  return (dist);
+float find_distance(double lat1, double lon1, double lat2, double lon2) {
+	double theta, dist;
+	theta = lon1 - lon2;
+	dist = sin(deg2rad(lat1)) * sin(deg2rad(lat2)) + cos(deg2rad(lat1)) * cos(deg2rad(lat2)) * cos(deg2rad(theta));
+	dist = acos(dist);
+	dist = rad2deg(dist);
+	dist = dist * 60 * 1.1515;
+	dist = dist * 1.609344 * 1000; // Dist in M
+	
+	return (dist);
 }
 
 /*:::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::*/
@@ -162,8 +195,8 @@ int main(void) {
     
     init_serial();
 	sei();
-	float peer_latitude = 42.9;
-	float peer_longitude = 90.9;
+	float peer_latitude = 34.02035031;
+	float peer_longitude = 118.287692;
     while (1) {               // Loop forever
         
         if (count == 50) {
@@ -172,18 +205,26 @@ int main(void) {
         	
         	parse_gps();
         	find_direction(peer_latitude,peer_longitude);
-        	double distance = find_distance(latitude_f, longitude_f, peer_latitude, peer_longitude);
-        	char distance_c[10];
-        	sprintf(distance_c, "%f", distance);
+        	float distance = find_distance(latitude_f, longitude_f, peer_latitude, peer_longitude);
+        	//distance = 10;
+        	unsigned char distance_c[10];
+        	sprintf(distance_c, "%4.1f", distance);
+
+        	//snprintf(distance_c, 10,  "%4.2f", distance);
         	strout(0, (unsigned char *) lat); //prints out "LAT:"
         	strout(0x40, (unsigned char *) lon); //prints out "LONG:"
         	strout(0x04, (unsigned char *) latitude); //prints out the actual value of latitude
         	strout(0x45, (unsigned char *) longitude); //prints out the actual value of longitude
+        	
+        	//if (peer_longitude > longitude_f)
+        	
         	strout(0x14, (unsigned char *) dir); //prints out "DIR:"
         	strout(0x18, (unsigned char *) direction); //prints out the direction
-        	strout(0x54, (unsigned char *) dist); //prints out "DIST:"
+        	strout(0x54, (unsigned char *) dist_c); //prints out "DIST:"
         	strout(0x59, (unsigned char *) distance_c); //prints out the distance in KM
-
+        	
+        	//strout(0x19, (unsigned char *) longitude[0]);
+        	//strout(0x20, (unsigned char *) longitude[1]);
 
         	_delay_ms(500);
         	cmdout(1);
@@ -203,10 +244,5 @@ ISR(USART_RX_vect)
 		gps_data[count] = temp_recv;
 		count++;
 	}
-	
-}
-
-ISR(PCINT1_vect)
-{
 	
 }
