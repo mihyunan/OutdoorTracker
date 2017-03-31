@@ -21,7 +21,7 @@
 
 #define LCD_Data_D     0xf0     // Bits in Port D for LCD data
 
-const unsigned char dist[] = "DIST:";
+const unsigned char distance[] = "DIST:";
 const unsigned char find[] = "FIND OFF";
 const unsigned char msg1[] = "In Danger";
 const unsigned char msg2[] = "I'm Fine";
@@ -113,7 +113,7 @@ void initialize()
 
 void init_setting(void)
 {
-	strout(0, (unsigned char *) dist);
+	strout(0, (unsigned char *) distance);
 	strout(0x0B, (unsigned char*) find);
 	strout(0x4B, (unsigned char*) msg1);
 	strout(0x1F, (unsigned char*) msg2);
