@@ -17,8 +17,8 @@ unsigned char longitude[15];
 float latitude_f, longitude_f;
 unsigned char direction[3];
 //strings to test lcd
-const unsigned char str1[] = ">> at328-5.c hi <<901234";
-const unsigned char str2[] = ">> USC EE459L <<78901234";
+/*const unsigned char str1[] = ">> at328-5.c hi <<901234";
+const unsigned char str2[] = ">> USC EE459L <<78901234";*/
 
 const unsigned char lat[] = "LAT:";
 const unsigned char lon[] = "LONG:";
@@ -29,16 +29,19 @@ const unsigned char dist[] = "DIST:";
 const unsigned char findon[] = "ON ";
 const unsigned char findoff[] = "OFF";
 const unsigned char arrow[] = ">";
-const unsigned char space[] = " ";
+//const unsigned char space[] = " ";
+volatile unsigned int buttonpressed = 0;
 volatile unsigned int buttonstate = 0;
 volatile unsigned int findstate = 0;
+volatile unsigned int emergencystate = 0;
+//volatile unsigned int buzzerstate = 0;
 
 void change_scroll() {
-	strout(0x0a, (unsigned char *) space);
-	strout(0x4a, (unsigned char *) space);
-	strout(0x1e, (unsigned char *) space);
-	strout(0x5e, (unsigned char *) space);
-	if (buttonstate == 0) { // 0x0a
+	strout(0x0a, (unsigned char *)" ");
+	strout(0x4a, (unsigned char *)" ");
+	strout(0x1e, (unsigned char *)" ");
+	strout(0x5e, (unsigned char *)" ");
+	if (buttonstate == 0) { // 0x0a 
 		strout(0x0a, (unsigned char *) arrow);
 	}
 	else if (buttonstate == 1) { //0x4a
@@ -50,17 +53,13 @@ void change_scroll() {
 	else if (buttonstate == 3) { //0x5e
 		strout(0x5e, (unsigned char *) arrow);
 	}
+	
+	if (findstate == 0) {
+		strout(0x10, (unsigned char *) findoff);
+	} else {
+		strout(0x10, (unsigned char *) findon);
+	}
 }
-
-
-
-/*
-LCD functions
-void initialize(void);
-void strout(int, unsigned char *);
-void cmdout(unsigned char);
-void datout(unsigned char);
-void nibout(unsigned char); */
 
 // receives a character
 char rx_char()
@@ -81,6 +80,12 @@ void init_buttons()
 	PORTC |= (1 << PC1) | (1 << PC2) | (1 << PC3) | (1 << PC4);
 	PCICR |= (1 << PCIE1); //enabling pin change interrupts on Port C
 	PCMSK1  |= ( (1 << PCINT12) | (1 << PCINT11) | (1 << PCINT10) | (1 << PCINT9) );	//setting bits in mask register
+}
+
+void init_buzzer()
+{
+	DDRB |= (1 << DD2);
+	//PORTB |= (1 << PB2);
 }
 
 void parse_gps()
@@ -112,68 +117,6 @@ void parse_gps()
 	}
 }
 
-void find_direction(double peer_latitude, double peer_longitude)
-{
-	if (peer_latitude > latitude_f)
-		if (peer_longitude > longitude_f)
-		{
-			direction[0]= 'N';
-			direction[1]= 'W';
-		}
-		else 
-		{
-			direction[0]= 'N';
-			direction[1]= 'E';
-		}
-	else
-		if (peer_longitude > longitude_f)
-		{
-			direction[0]= 'S';
-			direction[1]= 'W';
-		}
-		else
-		{
-			direction[0]= 'S';
-			direction[1]= 'E';
-		}
-
-			direction[2]= '\0';
-}
-
-
-
-/*:::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::*/
-/*::  Function prototypes                                           :*/
-/*:::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::*/
-double deg2rad(double);
-double rad2deg(double);
-
-double find_distance(double lat1, double lon1, double lat2, double lon2) {
-  double theta, dist;
-  theta = lon1 - lon2;
-  dist = sin(deg2rad(lat1)) * sin(deg2rad(lat2)) + cos(deg2rad(lat1)) * cos(deg2rad(lat2)) * cos(deg2rad(theta));
-  dist = acos(dist);
-  dist = rad2deg(dist);
-  dist = dist * 60 * 1.1515;
-  dist = dist * 1.609344; // Dist in KM
- 
-  return (dist);
-}
-
-/*:::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::*/
-/*::  This function converts decimal degrees to radians             :*/
-/*:::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::*/
-double deg2rad(double deg) {
-  return (deg * pi / 180);
-}
-
-/*:::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::*/
-/*::  This function converts radians to decimal degrees             :*/
-/*:::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::*/
-double rad2deg(double rad) {
-  return (rad * 180 / pi);
-}
-
 
 void init_serial() 
 {
@@ -187,38 +130,43 @@ void init_serial()
 int main(void) {
     initialize();               // Initialize the LCD display
     cmdout(1);
+    init_setting();
     
     init_serial();
-    init_setting();
     init_buttons();
-    change_scroll();
+    init_buzzer();
+    //change_scroll();
 	sei();
 	float peer_latitude = 42.9;
 	float peer_longitude = 90.9;
     while (1) {               // Loop forever
-        
+        if (buttonpressed == 1) {
+        	change_scroll();
+        	_delay_ms(120);
+        	buttonpressed = 0;
+        }
         
         if (count == 50) {
         	gps_data[count] = '\0';
         	//strout(0, (unsigned char *) recv_buf);
         	
         	parse_gps();
-        	find_direction(peer_latitude,peer_longitude);
-        	double distance = find_distance(latitude_f, longitude_f, peer_latitude, peer_longitude);
-        	char distance_c[10];
-        	/*sprintf(distance_c, "%f", distance);
-        	strout(0, (unsigned char *) lat); //prints out "LAT:"
+        	//find_direction(peer_latitude,peer_longitude);
+        	//double distance = find_distance(latitude_f, longitude_f, peer_latitude, peer_longitude);
+        	//char distance_c[10];
+        	sprintf(distance_c, "%f", distance);
+        	/*strout(0, (unsigned char *) lat); //prints out "LAT:"
         	strout(0x40, (unsigned char *) lon); //prints out "LONG:"
         	strout(0x04, (unsigned char *) latitude); //prints out the actual value of latitude
         	strout(0x45, (unsigned char *) longitude); //prints out the actual value of longitude
         	strout(0x14, (unsigned char *) dir); //prints out "DIR:"
         	strout(0x18, (unsigned char *) direction); //prints out the direction
         	strout(0x54, (unsigned char *) dist); //prints out "DIST:"
-        	strout(0x59, (unsigned char *) distance_c); //prints out the distance in KM
+        	strout(0x59, (unsigned char *) distance_c); //prints out the distance in KM*/
 
 
         	_delay_ms(500);
-        	cmdout(1); */
+        	//cmdout(1); 
         	count = 0;
         }
         
@@ -240,39 +188,60 @@ ISR(USART_RX_vect)
 
 ISR(PCINT1_vect)
 {
-	if (buttonstate == 0 && (PINC & 0x1d) == 0x1c) { //first line and down is pressed
+	if (buttonpressed == 0 && buttonstate == 0 && (PINC & 0x02) == 0x00) { //first line and down is pressed
 		buttonstate = 1;
-		change_scroll();
+		buttonpressed = 1;
 	}
-	else if (buttonstate == 1 && (PINC & 0x1d) == 0x1c) { //second line and down is pressed
+	else if (buttonpressed == 0 && buttonstate == 1 && (PINC & 0x02) == 0x00) { //second line and down is pressed
 		buttonstate = 2;
-		change_scroll();
+		buttonpressed = 1;
 	}
-	else if (buttonstate == 1 && (PINC & 0x1d) == 0x16) { //second line and up is pressed
+	else if (buttonpressed == 0 && buttonstate == 1 && (PINC & 0x08) == 0x00) { //second line and up is pressed
 		buttonstate = 0;
-		change_scroll();
+		buttonpressed = 1;
 	}
-	else if (buttonstate == 2 && (PINC & 0x1d) == 0x1c) { //third line and down is pressed
+	else if (buttonpressed == 0 && buttonstate == 2 && (PINC & 0x02) == 0x00) { //third line and down is pressed
 		buttonstate = 3;
-		change_scroll();
+		buttonpressed = 1;
 	}
-	else if (buttonstate == 2 && (PINC & 0x1d) == 0x16) { //third line and up is pressed
+	else if (buttonpressed == 0 && buttonstate == 2 && (PINC & 0x08) == 0x00) { //third line and up is pressed
 		buttonstate = 1;
-		change_scroll();
+		buttonpressed = 1;
 	}
-	else if (buttonstate == 3 && (PINC & 0x1d) == 0x16) { //fourth line and up is pressed
+	else if (buttonpressed == 0 && buttonstate == 3 && (PINC & 0x08) == 0x00) { //fourth line and up is pressed
 		buttonstate = 2;
-		change_scroll();
+		buttonpressed = 1;
 	}
-	/*else if (buttonstate == 0 && (PINC & 0x1d) == 0x1a && findstate == 0) {
-		strout(0x10, (unsigned char *) findon);
+	else if (buttonpressed == 0 && buttonstate == 0 && (PINC & 0x04) == 0x00 && findstate == 0) {
 		findstate = 1;
+		buttonpressed = 1;
 	}
-	else if (buttonstate == 0 && (PINC & 0x1d) == 0x1a && findstate == 1) {
-		strout(0x10, (unsigned char *) findoff);
+	else if (buttonpressed == 0 && buttonstate == 0 && (PINC & 0x04) == 0x00 && findstate == 1) {
 		findstate = 0;
-	}*/
+		buttonpressed = 1;
+	}
+	else if (buttonpressed == 0 && buttonstate == 1 && (PINC & 0x04) == 0x00) {
+		strout(0x54, (unsigned char*) "Sent Msg1");
+	}
+	else if (buttonpressed == 0 && buttonstate == 2 && (PINC & 0x04) == 0x00) {
+		strout(0x54, (unsigned char*) "Sent Msg2");
+	}
+	else if (buttonpressed == 0 && buttonstate == 3 && (PINC & 0x04) == 0x00) {
+		strout(0x54, (unsigned char*) "Sent Msg3");
+	}
+	else if (buttonpressed == 0 && emergencystate == 0 && (PINC & 0x10) == 0x00) {
+		strout(0x14, (unsigned char*) "Emergency!");
+		PORTB |= (1 << PB2);
+		emergencystate = 1;
+		buttonpressed = 1;
+	}
+	else if (buttonpressed == 0 && emergencystate == 1 && (PINC & 0x10) == 0x00) {
+		strout(0x14, (unsigned char*) "off        ");
+		PORTB &= ~(1 << PB2);
+		emergencystate = 0;
+		buttonpressed = 1;
+	}
 	
-	//select = 0x1a
+	//select = 0x04
 	//emergency = 0x0d
 }
