@@ -8,6 +8,8 @@
 #define BAUD 9600
 #define MYUBRR FOSC/16/BAUD-1
 #define pi 3.14159265358979323846
+#define PRESCALAR 256
+ 
 
 volatile unsigned char temp_recv = 0;
 volatile unsigned int count = 0;
@@ -34,6 +36,9 @@ volatile unsigned int buttonpressed = 0;
 volatile unsigned int buttonstate = 0;
 volatile unsigned int findstate = 0;
 volatile unsigned int emergencystate = 0;
+volatile unsigned int buzzerstate = 0;
+volatile unsigned int buzz = 0;
+volatile unsigned int change = 0;
 //volatile unsigned int buzzerstate = 0;
 
 void change_scroll() {
@@ -85,7 +90,18 @@ void init_buttons()
 void init_buzzer()
 {
 	DDRB |= (1 << DD2);
-	//PORTB |= (1 << PB2);
+}
+
+void init_counter()
+{
+	TCCR1B |= (1 << WGM12);
+	TIMSK1 |= (1 << OCIE1A);
+	//OCR1A = 0.25 * FOSC / PRESCALAR;
+	TCCR1B |= (1 << CS12);
+}
+
+void changeOCR(double delay) {
+	OCR1A = delay * FOSC / PRESCALAR;
 }
 
 void parse_gps()
@@ -135,6 +151,8 @@ int main(void) {
     init_serial();
     init_buttons();
     init_buzzer();
+    init_counter();
+    changeOCR(0.25);
     //change_scroll();
 	sei();
 	float peer_latitude = 42.9;
@@ -146,6 +164,13 @@ int main(void) {
         	buttonpressed = 0;
         }
         
+        if (change == 10) {
+        	cli();
+        	changeOCR(0.1);
+        	sei();
+        	change =0;
+        }
+        
         if (count == 50) {
         	gps_data[count] = '\0';
         	//strout(0, (unsigned char *) recv_buf);
@@ -154,7 +179,7 @@ int main(void) {
         	//find_direction(peer_latitude,peer_longitude);
         	//double distance = find_distance(latitude_f, longitude_f, peer_latitude, peer_longitude);
         	//char distance_c[10];
-        	sprintf(distance_c, "%f", distance);
+        	//sprintf(distance_c, "%f", distance);
         	/*strout(0, (unsigned char *) lat); //prints out "LAT:"
         	strout(0x40, (unsigned char *) lon); //prints out "LONG:"
         	strout(0x04, (unsigned char *) latitude); //prints out the actual value of latitude
@@ -166,6 +191,7 @@ int main(void) {
 
 
         	_delay_ms(500);
+        	
         	//cmdout(1); 
         	count = 0;
         }
@@ -214,10 +240,12 @@ ISR(PCINT1_vect)
 	}
 	else if (buttonpressed == 0 && buttonstate == 0 && (PINC & 0x04) == 0x00 && findstate == 0) {
 		findstate = 1;
+		buzzerstate = 2;
 		buttonpressed = 1;
 	}
 	else if (buttonpressed == 0 && buttonstate == 0 && (PINC & 0x04) == 0x00 && findstate == 1) {
 		findstate = 0;
+		buzzerstate = 0;
 		buttonpressed = 1;
 	}
 	else if (buttonpressed == 0 && buttonstate == 1 && (PINC & 0x04) == 0x00) {
@@ -231,17 +259,38 @@ ISR(PCINT1_vect)
 	}
 	else if (buttonpressed == 0 && emergencystate == 0 && (PINC & 0x10) == 0x00) {
 		strout(0x14, (unsigned char*) "Emergency!");
-		PORTB |= (1 << PB2);
+		buzzerstate = 1;
 		emergencystate = 1;
 		buttonpressed = 1;
 	}
 	else if (buttonpressed == 0 && emergencystate == 1 && (PINC & 0x10) == 0x00) {
 		strout(0x14, (unsigned char*) "off        ");
-		PORTB &= ~(1 << PB2);
+		buzzerstate = 0;
 		emergencystate = 0;
 		buttonpressed = 1;
 	}
 	
 	//select = 0x04
 	//emergency = 0x0d
+}
+
+ISR(TIMER1_COMPA_vect)
+{
+	if (buzzerstate == 2)
+	{
+		if (buzz == 0) {
+			PORTB |= (1 << PB2);
+			buzz = 1;
+		} else {
+			PORTB &= ~(1 << PB2);
+			buzz = 0;
+		}
+		change++;
+	} 
+	else if (buzzerstate == 1) {
+		PORTB |= (1 << PB2);
+	}
+	else if (buzzerstate == 0) {
+		PORTB &= ~(1 << PB2);
+	}
 }
