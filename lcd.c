@@ -21,11 +21,11 @@
 
 #define LCD_Data_D     0xf0     // Bits in Port D for LCD data
 
-const unsigned char distance[] = "DIST:";
-const unsigned char find[] = ">FIND OFF";
-const unsigned char msg1[] = "In Danger";
-const unsigned char msg2[] = "I'm Fine";
-const unsigned char msg3[] = "Wait!";
+//const unsigned char distance[] = "DIST:";
+//const unsigned char find[] = ">FIND OFF";
+//const unsigned char msg1[] = "In Danger";
+//const unsigned char msg2[] = "I'm Fine";
+//const unsigned char msg3[] = "Wait!";
 
 /*
   strout - Print the contents of the character string "s" starting at LCD
@@ -113,9 +113,10 @@ void initialize()
 
 void init_setting(void)
 {
-	strout(0, (unsigned char *) distance);
-	strout(0x0A, (unsigned char*) find);
-	strout(0x4B, (unsigned char*) msg1);
-	strout(0x1F, (unsigned char*) msg2);
-	strout(0x5F, (unsigned char*) msg3);
+	//strout(0x00, (unsigned char*) "DT:");
+	strout(0x40, (unsigned char*) "Dir:"); 
+	strout(0x0A, (unsigned char*) ">FIND OFF");
+	strout(0x4B, (unsigned char*) "In Danger");
+	strout(0x1F, (unsigned char*) "I'm Fine");
+	strout(0x5F, (unsigned char*) "Wait!");
 }

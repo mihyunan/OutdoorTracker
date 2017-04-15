@@ -3,35 +3,28 @@
 #include <avr/interrupt.h>
 #include "lcd.h"
 #include <math.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 
 #define FOSC 7372800
 #define BAUD 9600
 #define MYUBRR FOSC/16/BAUD-1
-#define pi 3.14159265358979323846
 #define PRESCALAR 256
- 
+
+float LEAVEY_LAT = 34.013183;
+float LEAVEY_LONG = 118.169667;
 
 volatile unsigned char temp_recv = 0;
 volatile unsigned int count = 0;
-volatile unsigned char gps_data[150];
-unsigned char latitude[15];
-unsigned char longitude[15];
+volatile unsigned char gps_data[101];
+char latitude[15];
+char longitude[15];
 float latitude_f, longitude_f;
-unsigned char direction[3];
-//strings to test lcd
-/*const unsigned char str1[] = ">> at328-5.c hi <<901234";
-const unsigned char str2[] = ">> USC EE459L <<78901234";*/
+volatile float start;
+float distance;
+volatile unsigned char direction[3];
 
-const unsigned char lat[] = "LAT:";
-const unsigned char lon[] = "LONG:";
-const unsigned char dir[] = "DIR:";
-const unsigned char dist[] = "DIST:";
-
-
-const unsigned char findon[] = "ON ";
-const unsigned char findoff[] = "OFF";
-const unsigned char arrow[] = ">";
-//const unsigned char space[] = " ";
 volatile unsigned int buttonpressed = 0;
 volatile unsigned int buttonstate = 0;
 volatile unsigned int findstate = 0;
@@ -39,7 +32,6 @@ volatile unsigned int emergencystate = 0;
 volatile unsigned int buzzerstate = 0;
 volatile unsigned int buzz = 0;
 volatile unsigned int change = 0;
-//volatile unsigned int buzzerstate = 0;
 
 void change_scroll() {
 	strout(0x0a, (unsigned char *)" ");
@@ -47,22 +39,22 @@ void change_scroll() {
 	strout(0x1e, (unsigned char *)" ");
 	strout(0x5e, (unsigned char *)" ");
 	if (buttonstate == 0) { // 0x0a 
-		strout(0x0a, (unsigned char *) arrow);
+		strout(0x0a, (unsigned char *) ">");
 	}
 	else if (buttonstate == 1) { //0x4a
-		strout(0x4a, (unsigned char *) arrow);
+		strout(0x4a, (unsigned char *) ">");
 	}
 	else if (buttonstate == 2) { //0x1e
-		strout(0x1e, (unsigned char *) arrow);
+		strout(0x1e, (unsigned char *) ">");
 	}
 	else if (buttonstate == 3) { //0x5e
-		strout(0x5e, (unsigned char *) arrow);
+		strout(0x5e, (unsigned char *) ">");
 	}
 	
 	if (findstate == 0) {
-		strout(0x10, (unsigned char *) findoff);
+		strout(0x0B, (unsigned char *) "FIND OFF");
 	} else {
-		strout(0x10, (unsigned char *) findon);
+		strout(0x0B, (unsigned char *) "FIND ON ");
 	}
 }
 
@@ -101,6 +93,7 @@ void init_counter()
 }
 
 void changeOCR(double delay) {
+	TCCR1B |= (1 << WGM12);
 	OCR1A = delay * FOSC / PRESCALAR;
 }
 
@@ -122,17 +115,88 @@ void parse_gps()
 		}
 		i += 3;
 		latitude[k] = '\0';
-		latitude_f = atof(latitude);
+		
 		k = 0;
 		
 		while (gps_data[i] != ',') {
 			longitude[k++] = gps_data[i++];
 		}
 		longitude[k] = '\0';
-		longitude_f = atof(longitude);
+		
+		latitude_f = atof(latitude) / 100;
+		longitude_f = atof(longitude) / 100;
 	}
+	
 }
 
+float convert_to_distance() 
+{
+	//float distance = sqrtf(pow(LEAVEY_LAT-latitude_f,2)+pow(LEAVEY_LONG-longitude_f,2))/0.0107548*1000;
+	//return distance;
+	
+	
+	//float x = (int)(LEAVEY_LAT * 1000000);
+	float x = (LEAVEY_LAT*1000000 - ((int)LEAVEY_LAT*1000000)) / 10000;
+	x = x - ((latitude_f*1000000 - ((int)latitude_f*1000000)) / 10000);
+	x = fabs(x) / 0.856;
+	
+	float y = (LEAVEY_LONG*1000000 - ((int)LEAVEY_LONG*1000000)) / 10000;
+	y = y - ((longitude_f*1000000 - ((int)longitude_f*1000000)) / 10000);
+	y = fabs(y) / 1.044;
+	//float x = ((int)(LEAVEY_LAT * 1000000) % 1000000 / 10000) - ((int)(latitude_f *1000000) % 1000000 / 10000);
+	//float y = ((int)(LEAVEY_LONG * 1000000) % 1000000 / 10000) - ((int)(longitude_f *1000000) % 1000000 / 10000);
+	//x = fabs(x) / 0.856;
+	//y = fabs(y) / 1.044;
+	//x = x/0.856;
+	//y = y/1.044;
+	float dst = sqrtf(pow(x,2)+pow(y,2));
+	dst = 1609.34*dst; //convert miles to meters
+	//float d = sqrtf(pow(LEAVEY_LAT-latitude_f,2)+pow(LEAVEY_LONG-longitude_f,2));
+	if (dst > 10000) return latitude_f;
+	else return dst;
+	//return x;
+}
+
+float change_OCR_rate()
+{
+	int percent = (int)(distance/start * 100);
+	percent = percent - (percent % 10);
+	float percent_f = percent/100.0;
+	changeOCR(0.7*percent_f);
+	return percent_f;
+}
+
+
+void find_direction()
+{ // 40 90 34 118
+	if (LEAVEY_LAT > latitude_f)
+	{
+		if (LEAVEY_LONG > longitude_f)
+		{
+			direction[0]= 'N';
+			direction[1]= 'W';
+		}
+		else 
+		{
+			direction[0]= 'N';
+			direction[1]= 'E';
+		}
+	}
+	else
+	{
+		if (LEAVEY_LONG > longitude_f)
+		{
+			direction[0]= 'S';
+			direction[1]= 'W';
+		}
+		else
+		{
+			direction[0]= 'S';
+			direction[1]= 'E';
+		}
+	}
+	direction[2]= '\0';
+}
 
 void init_serial() 
 {
@@ -143,6 +207,22 @@ void init_serial()
 	UCSR0C = (1 << USBS0) | (3 << UCSZ00);
 }
 
+void init_mux_select() 
+{
+	DDRD |= (1 << DD2);
+}
+
+void select_GPS()
+{
+	PORTD &= ~(1 << PD2);
+}
+
+void select_RF()
+{
+	PORTD |= (1 << PD2);
+}
+
+
 int main(void) {
     initialize();               // Initialize the LCD display
     cmdout(1);
@@ -151,51 +231,77 @@ int main(void) {
     init_serial();
     init_buttons();
     init_buzzer();
+    init_mux_select();
     init_counter();
-    changeOCR(0.25);
-    //change_scroll();
+    changeOCR(1);
+    
+    select_GPS();
+    
 	sei();
-	float peer_latitude = 42.9;
-	float peer_longitude = 90.9;
+
     while (1) {               // Loop forever
         if (buttonpressed == 1) {
         	change_scroll();
-        	_delay_ms(120);
+        	_delay_ms(200);
         	buttonpressed = 0;
-        }
+        } 
         
         if (change == 10) {
-        	cli();
         	changeOCR(0.1);
-        	sei();
-        	change =0;
-        }
+        	change = 0;
+        } 
         
-        if (count == 50) {
+        if (count == 100) {
         	gps_data[count] = '\0';
-        	//strout(0, (unsigned char *) recv_buf);
-        	
         	parse_gps();
-        	//find_direction(peer_latitude,peer_longitude);
-        	//double distance = find_distance(latitude_f, longitude_f, peer_latitude, peer_longitude);
-        	//char distance_c[10];
-        	//sprintf(distance_c, "%f", distance);
-        	/*strout(0, (unsigned char *) lat); //prints out "LAT:"
-        	strout(0x40, (unsigned char *) lon); //prints out "LONG:"
-        	strout(0x04, (unsigned char *) latitude); //prints out the actual value of latitude
-        	strout(0x45, (unsigned char *) longitude); //prints out the actual value of longitude
-        	strout(0x14, (unsigned char *) dir); //prints out "DIR:"
-        	strout(0x18, (unsigned char *) direction); //prints out the direction
-        	strout(0x54, (unsigned char *) dist); //prints out "DIST:"
-        	strout(0x59, (unsigned char *) distance_c); //prints out the distance in KM*/
-
-
-        	_delay_ms(500);
+        	find_direction();
+        	distance = convert_to_distance();
+        	float percent;
+        	if (findstate == 1) {
+        		percent = change_OCR_rate();
+        	}
         	
-        	//cmdout(1); 
+        	char dist_c[15];
+        	char percent_c[15];
+        	char x[15];
+        	char y[15];
+        	snprintf(dist_c, 15, "Dt:%4.1fm", distance);
+        	//snprintf(percent_c, 15, "%4.2f", percent); 
+        	//strout(0x00, (unsigned char *) gps_data);
+        	//snprintf(x, 15, "%4.6f", latitude_f);
+        	//snprintf(y, 15, "%4.6f", longitude_f);
+        	strout(0x00, (unsigned char *) dist_c);
+        	strout(0x44, (unsigned char *) direction);
+        	//strout(0x44, (unsigned char *) percent_c);
+        	//strout(0x14, (unsigned char *) x);
+        	//strout(0x54, (unsigned char *) y);
+        	//strout(0x14, (unsigned char *) latitude);
+        	//strout(0x54, (unsigned char *) longitude);
+        	
+        	_delay_ms(100);
         	count = 0;
         }
         
+        /*if (count == 50) {
+        	gps_data[count] = '\0';
+        	
+        	parse_gps();
+        	//find_direction();
+        	//float distance = convert_to_distance();
+        	//char distance_c[10];
+        	//sprintf(distance_c, "%4.4fkm", distance);
+        	//strout(0x00, (unsigned char *) distance_c);
+        	//sprintf(distance_c, "%f", latitude_f);
+        	
+        	//strout(0x14, (unsigned char *) latitude);
+        	//strout(0x54, (unsigned char *) longitude);
+        	//strout(0x44, (unsigned char *) direction);
+
+        	_delay_ms(100);
+        	
+        	//cmdout(1); 
+        	count = 0;
+        } */
     	
     }
 
@@ -205,7 +311,7 @@ int main(void) {
 ISR(USART_RX_vect)
 {
 	temp_recv = rx_char();
-	if (count < 50) {
+	if (count < 100) {
 		gps_data[count] = temp_recv;
 		count++;
 	}
@@ -239,6 +345,8 @@ ISR(PCINT1_vect)
 		buttonpressed = 1;
 	}
 	else if (buttonpressed == 0 && buttonstate == 0 && (PINC & 0x04) == 0x00 && findstate == 0) {
+		
+		start = distance;
 		findstate = 1;
 		buzzerstate = 2;
 		buttonpressed = 1;
@@ -269,9 +377,6 @@ ISR(PCINT1_vect)
 		emergencystate = 0;
 		buttonpressed = 1;
 	}
-	
-	//select = 0x04
-	//emergency = 0x0d
 }
 
 ISR(TIMER1_COMPA_vect)
@@ -285,7 +390,7 @@ ISR(TIMER1_COMPA_vect)
 			PORTB &= ~(1 << PB2);
 			buzz = 0;
 		}
-		change++;
+		//change++;
 	} 
 	else if (buzzerstate == 1) {
 		PORTB |= (1 << PB2);
