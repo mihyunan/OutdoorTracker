@@ -32,6 +32,8 @@ volatile unsigned int emergencystate = 0;
 volatile unsigned int buzzerstate = 0;
 volatile unsigned int buzz = 0;
 volatile unsigned int change = 0;
+volatile unsigned int rf_gps = 1;
+volatile unsigned int messagestate = 1;
 
 void change_scroll() {
 	strout(0x0a, (unsigned char *)" ");
@@ -161,6 +163,9 @@ float change_OCR_rate()
 {
 	int percent = (int)(distance/start * 100);
 	percent = percent - (percent % 10);
+	if (percent == 0) {
+		return 0;
+	}
 	float percent_f = percent/100.0;
 	changeOCR(0.7*percent_f);
 	return percent_f;
@@ -222,6 +227,20 @@ void select_RF()
 	PORTD |= (1 << PD2);
 }
 
+void send_message()
+{
+	if (messagestate == 0) {
+		strout(0x54, (unsigned char*) "send msg0");
+		tx_char(0x30);
+	} else if (messagestate == 1) {
+		strout(0x54, (unsigned char*) "send msg1");
+		tx_char(0x31);
+	} else if (messagestate == 2) {
+		strout(0x54, (unsigned char*) "send msg2");
+		tx_char(0x32);
+	}
+}
+
 
 int main(void) {
     initialize();               // Initialize the LCD display
@@ -236,49 +255,84 @@ int main(void) {
     changeOCR(1);
     
     select_GPS();
+    //select_RF();
     
 	sei();
 
     while (1) {               // Loop forever
         if (buttonpressed == 1) {
         	change_scroll();
+        	send_message();
         	_delay_ms(200);
         	buttonpressed = 0;
         } 
         
-        if (change == 10) {
+        /*if (change == 10) {
         	changeOCR(0.1);
         	change = 0;
-        } 
+        } */
+        
+        send_message();
+        
+        if (rf_gps == 0) {
+        	select_RF();
+        } else {
+        	select_GPS();
+        }
+        
+        if (rf_gps == 0) {
+        	if (temp_recv == 0x30) {
+        		strout(0x14, (unsigned char*) "In Danger");
+        	}
+        	else if (temp_recv == 0x31) {
+        		strout(0x14, (unsigned char*) "I'm Fine ");
+        	}
+        	else if (temp_recv == 0x32) {
+        		strout(0x14, (unsigned char*) "Wait!    ");
+        	}
+        }
+        
         
         if (count == 100) {
-        	gps_data[count] = '\0';
-        	parse_gps();
+        	
+        	
+        	if (rf_gps == 1) {
+        		gps_data[count] = '\0';
+        		parse_gps();
+        		find_direction();
+        		distance = convert_to_distance();
+        		char dist_c[15];
+        		snprintf(dist_c, 15, "Dt:%4.1fm", distance);
+        		strout(0x00, (unsigned char *) dist_c);
+        		strout(0x44, (unsigned char *) direction);
+        	}
+        	
+        	/*parse_gps();
         	find_direction();
-        	distance = convert_to_distance();
+        	distance = convert_to_distance();*/
         	float percent;
         	if (findstate == 1) {
         		percent = change_OCR_rate();
         	}
         	
-        	char dist_c[15];
-        	char percent_c[15];
-        	char x[15];
-        	char y[15];
-        	snprintf(dist_c, 15, "Dt:%4.1fm", distance);
+        	//char dist_c[15];
+        	//char percent_c[15];
+        	//char x[15];
+        	//char y[15];
+        	//snprintf(dist_c, 15, "Dt:%4.1fm", distance);
         	//snprintf(percent_c, 15, "%4.2f", percent); 
         	//strout(0x00, (unsigned char *) gps_data);
         	//snprintf(x, 15, "%4.6f", latitude_f);
         	//snprintf(y, 15, "%4.6f", longitude_f);
-        	strout(0x00, (unsigned char *) dist_c);
-        	strout(0x44, (unsigned char *) direction);
+        	//strout(0x00, (unsigned char *) dist_c);
+        	//strout(0x44, (unsigned char *) direction);
         	//strout(0x44, (unsigned char *) percent_c);
         	//strout(0x14, (unsigned char *) x);
         	//strout(0x54, (unsigned char *) y);
         	//strout(0x14, (unsigned char *) latitude);
         	//strout(0x54, (unsigned char *) longitude);
         	
-        	_delay_ms(100);
+        	//_delay_ms(100);
         	count = 0;
         }
         
@@ -311,7 +365,7 @@ int main(void) {
 ISR(USART_RX_vect)
 {
 	temp_recv = rx_char();
-	if (count < 100) {
+	if (rf_gps == 1 && count < 100) {
 		gps_data[count] = temp_recv;
 		count++;
 	}
@@ -345,34 +399,39 @@ ISR(PCINT1_vect)
 		buttonpressed = 1;
 	}
 	else if (buttonpressed == 0 && buttonstate == 0 && (PINC & 0x04) == 0x00 && findstate == 0) {
-		
 		start = distance;
-		findstate = 1;
-		buzzerstate = 2;
+		if (distance > 0) {
+			findstate = 1;
+			buzzerstate = 2;
+		}
 		buttonpressed = 1;
 	}
 	else if (buttonpressed == 0 && buttonstate == 0 && (PINC & 0x04) == 0x00 && findstate == 1) {
+		changeOCR(1);
 		findstate = 0;
 		buzzerstate = 0;
 		buttonpressed = 1;
 	}
 	else if (buttonpressed == 0 && buttonstate == 1 && (PINC & 0x04) == 0x00) {
-		strout(0x54, (unsigned char*) "Sent Msg1");
+		//strout(0x54, (unsigned char*) "Sent Msg1");
+		messagestate = 0;
 	}
 	else if (buttonpressed == 0 && buttonstate == 2 && (PINC & 0x04) == 0x00) {
-		strout(0x54, (unsigned char*) "Sent Msg2");
+		//strout(0x54, (unsigned char*) "Sent Msg2");
+		messagestate = 1;
 	}
 	else if (buttonpressed == 0 && buttonstate == 3 && (PINC & 0x04) == 0x00) {
-		strout(0x54, (unsigned char*) "Sent Msg3");
+		//strout(0x54, (unsigned char*) "Sent Msg3");
+		messagestate = 2;
 	}
 	else if (buttonpressed == 0 && emergencystate == 0 && (PINC & 0x10) == 0x00) {
-		strout(0x14, (unsigned char*) "Emergency!");
+		//strout(0x14, (unsigned char*) "Emergency!");
 		buzzerstate = 1;
 		emergencystate = 1;
 		buttonpressed = 1;
 	}
 	else if (buttonpressed == 0 && emergencystate == 1 && (PINC & 0x10) == 0x00) {
-		strout(0x14, (unsigned char*) "off        ");
+		//strout(0x14, (unsigned char*) "off        ");
 		buzzerstate = 0;
 		emergencystate = 0;
 		buttonpressed = 1;
@@ -397,5 +456,16 @@ ISR(TIMER1_COMPA_vect)
 	}
 	else if (buzzerstate == 0) {
 		PORTB &= ~(1 << PB2);
+	}
+	change++;
+	if (change == 8 && rf_gps == 0) 
+	{
+		rf_gps = 1;
+		change = 0;
+	} 
+	else if (change == 2 && rf_gps == 1)
+	{
+		rf_gps = 0;
+		change = 0;
 	}
 }
