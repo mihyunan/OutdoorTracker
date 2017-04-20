@@ -154,6 +154,7 @@ double deg2rad(double);
 double rad2deg(double);
 
 float find_distance(double lat1, double lon1, double lat2, double lon2) {
+	
 	double theta, dist;
 	theta = lon1 - lon2;
 	dist = sin(deg2rad(lat1)) * sin(deg2rad(lat2)) + cos(deg2rad(lat1)) * cos(deg2rad(lat2)) * cos(deg2rad(theta));
@@ -162,6 +163,10 @@ float find_distance(double lat1, double lon1, double lat2, double lon2) {
 	dist = dist * 60 * 1.1515;
 	dist = dist * 1.609344 * 1000; // Dist in M
 	
+	/*d_ew = (lon2 - lon1) * cos(lat1);
+	d_ns = (lat2 - lat1);
+
+	double dist = sqrt(d_ew * d_ew + d_ns * d_ns);*/
 	return (dist);
 }
 
@@ -195,8 +200,8 @@ int main(void) {
     
     init_serial();
 	sei();
-	float peer_latitude = 34.02035031;
-	float peer_longitude = 118.287692;
+	float peer_latitude = 34.02116397106819;
+	float peer_longitude = 118.28957498073578;
     while (1) {               // Loop forever
         
         if (count == 50) {

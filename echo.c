@@ -19,7 +19,7 @@ float latitude_f, longitude_f;
 volatile float start;
 float distance;
 volatile unsigned char direction[3];
-
+int messageState;
 
 // receives a character
 char rx_char()
@@ -45,14 +45,53 @@ void init_serial()
 	UCSR0C = (1 << USBS0) | (3 << UCSZ00);
 }
 
+void init_dip_led()
+{
+	PORTC |= ((1<<PC1) | (1<<PC2) | (1<<PC3) | (1<<PC4));  //Enable Pull up resistors
+	DDRB |=  ((1<<DD1) | (1<<DD2));
+
+
+}
+void send_message()
+{
+	if (messageState == 0)
+		tx_char(0x30);
+	else if (messageState == 1)
+		tx_char(0x31);
+	else if (messageState == 2)
+		tx_char(0x32);
+	else if (messageState == 3)
+		tx_char(0x33);
+	else if (messageState == 4)
+		tx_char(0x34);
+
+}
+
+
+void color_led()
+{
+	if (temp_recv == 0x30) { //In danger
+		PORTB |= (1<<PB1);
+		PORTB &= ~(1<<PB2);
+	}
+	else if (temp_recv == 0x31 || temp_recv == 0x32) {
+		PORTB |= (1<<PB2);
+		PORTB &= ~(1<<PB1);
+	}
+	
+}
 
 int main(void) {
     init_serial();
-    
+    init_dip_led();
 	sei();
 
+
+
     while (1) {               // Loop forever
-        tx_char(temp_recv);
+        //tx_char(temp_recv);
+        send_message();
+        color_led();
     }
 
     return 0;   /* never reached */
@@ -66,4 +105,40 @@ ISR(USART_RX_vect)
 		count++;
 	}*/
 	
+}
+
+ISR(PCINT1_vect) //Pin Change Interrupt Request 1 (Port C)
+{
+	if (((PINC & (1<<PC1)) == 0) && ((PINC & (1<<PC2)) == 0)) //Message 00 In danger
+	{
+		messageState =0;
+
+	}
+	else if (((PINC & (1<<PC1)) == 0) && ((PINC & (1<<PC2)) == 1)) //Message 01 I'm fine
+	{
+		messageState =1;
+
+
+	}
+	else if (((PINC & (1<<PC1)) == 1) && ((PINC & (1<<PC2)) == 0)) //Message 10 Wait
+	{
+		messageState =2;
+
+	}
+
+	//GPS if needed
+
+
+	if (((PINC & (1<<PC3)) == 0) && ((PINC & (1<<PC4)) == 0)) //Message 00 In danger
+	{
+		messageState =3;
+
+	}
+	else if (((PINC & (1<<PC3)) == 0) && ((PINC & (1<<PC4)) == 1)) //Message 00 In danger
+	{
+		messageState =4;
+
+	}
+
+
 }
