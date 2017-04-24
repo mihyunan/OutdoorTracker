@@ -61,10 +61,11 @@ void send_message()
 	else if (messageState == 2)
 		tx_char(0x32);
 	else if (messageState == 3)
-		tx_char(0x33);
+		tx_char(0x5b);
 	else if (messageState == 4)
-		tx_char(0x34);
-
+		tx_char(0x5c);
+	else if (messageState == 5)
+		tx_char(0x5d);
 }
 
 
@@ -90,6 +91,31 @@ int main(void) {
 
     while (1) {               // Loop forever
         //tx_char(temp_recv);
+
+        if (((PINC & (1<<PC1)) == 0) && ((PINC & (1<<PC2)) == 0)) //Message 00 In danger
+		{
+			messageState =0;
+		}
+		if (((PINC & (1<<PC1)) == 0) && ((PINC & (1<<PC2)) == 0x04)) //Message 01 I'm fine
+		{
+			messageState =1;
+		}
+		if (((PINC & (1<<PC1)) == 0x02) && ((PINC & (1<<PC2)) == 0)) //Message 10 Wait
+		{
+			messageState =2;
+		}
+		if (((PINC & (1<<PC3)) == 0) && ((PINC & (1<<PC4)) == 0)) //Message 00 In danger
+		{
+			messageState =3;
+		}
+		if (((PINC & (1<<PC3)) == 0) && ((PINC & (1<<PC4)) == 0x10)) //Message 01 I'm fine
+		{
+			messageState =4;
+		}
+		if (((PINC & (1<<PC3)) == 0x08) && ((PINC & (1<<PC4)) == 0)) //Message 10 Wait
+		{
+			messageState =5;
+		}
         send_message();
         color_led();
     }

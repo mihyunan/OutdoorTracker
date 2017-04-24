@@ -11,9 +11,16 @@
 #define BAUD 9600
 #define MYUBRR FOSC/16/BAUD-1
 #define PRESCALAR 256
+#define LEAVEY_LAT 34.013183
+#define LEAVEY_LONG 118.169667
+#define SSL_LAT 34.011767
+#define SSL_LONG 118.173267
+#define PARK_LAT 34.01136667
+#define PARK_LONG 118.1719
 
-float LEAVEY_LAT = 34.013183;
-float LEAVEY_LONG = 118.169667;
+
+float PEER_LAT = SSL_LAT;
+float PEER_LONG = SSL_LONG;
 
 volatile unsigned char temp_recv = 0;
 volatile unsigned int count = 0;
@@ -34,6 +41,8 @@ volatile unsigned int buzz = 0;
 volatile unsigned int change = 0;
 volatile unsigned int rf_gps = 1;
 volatile unsigned int messagestate = 1;
+
+unsigned int gpsstate = 1;
 
 void change_scroll() {
 	strout(0x0a, (unsigned char *)" ");
@@ -138,11 +147,11 @@ float convert_to_distance()
 	
 	
 	//float x = (int)(LEAVEY_LAT * 1000000);
-	float x = (LEAVEY_LAT*1000000 - ((int)LEAVEY_LAT*1000000)) / 10000;
+	float x = (PEER_LAT*1000000 - ((int)PEER_LAT*1000000)) / 10000;
 	x = x - ((latitude_f*1000000 - ((int)latitude_f*1000000)) / 10000);
 	x = fabs(x) / 0.856;
 	
-	float y = (LEAVEY_LONG*1000000 - ((int)LEAVEY_LONG*1000000)) / 10000;
+	float y = (PEER_LONG*1000000 - ((int)PEER_LONG*1000000)) / 10000;
 	y = y - ((longitude_f*1000000 - ((int)longitude_f*1000000)) / 10000);
 	y = fabs(y) / 1.044;
 	//float x = ((int)(LEAVEY_LAT * 1000000) % 1000000 / 10000) - ((int)(latitude_f *1000000) % 1000000 / 10000);
@@ -154,7 +163,7 @@ float convert_to_distance()
 	float dst = sqrtf(pow(x,2)+pow(y,2));
 	dst = 1609.34*dst; //convert miles to meters
 	//float d = sqrtf(pow(LEAVEY_LAT-latitude_f,2)+pow(LEAVEY_LONG-longitude_f,2));
-	if (dst > 10000) return latitude_f;
+	if (dst > 10000) return 7;
 	else return dst;
 	//return x;
 }
@@ -174,9 +183,9 @@ float change_OCR_rate()
 
 void find_direction()
 { // 40 90 34 118
-	if (LEAVEY_LAT > latitude_f)
+	if (PEER_LAT > latitude_f)
 	{
-		if (LEAVEY_LONG > longitude_f)
+		if (PEER_LONG > longitude_f)
 		{
 			direction[0]= 'N';
 			direction[1]= 'W';
@@ -189,7 +198,7 @@ void find_direction()
 	}
 	else
 	{
-		if (LEAVEY_LONG > longitude_f)
+		if (PEER_LONG > longitude_f)
 		{
 			direction[0]= 'S';
 			direction[1]= 'W';
@@ -230,13 +239,13 @@ void select_RF()
 void send_message()
 {
 	if (messagestate == 0) {
-		strout(0x54, (unsigned char*) "send msg0");
+		//strout(0x54, (unsigned char*) "send msg0");
 		tx_char(0x30);
 	} else if (messagestate == 1) {
-		strout(0x54, (unsigned char*) "send msg1");
+		//strout(0x54, (unsigned char*) "send msg1");
 		tx_char(0x31);
 	} else if (messagestate == 2) {
-		strout(0x54, (unsigned char*) "send msg2");
+		//strout(0x54, (unsigned char*) "send msg2");
 		tx_char(0x32);
 	}
 }
@@ -283,12 +292,31 @@ int main(void) {
         if (rf_gps == 0) {
         	if (temp_recv == 0x30) {
         		strout(0x14, (unsigned char*) "In Danger");
+        		if (distance > 0) {
+					findstate = 1;
+					buzzerstate = 2;
+				}
         	}
         	else if (temp_recv == 0x31) {
         		strout(0x14, (unsigned char*) "I'm Fine ");
         	}
         	else if (temp_recv == 0x32) {
         		strout(0x14, (unsigned char*) "Wait!    ");
+        	}
+        	else if (temp_recv == 0x5b)
+        	{
+        		strout(0x54, (unsigned char*) "leavey");
+        		gpsstate = 0;
+        	}
+        	else if (temp_recv == 0x5c)
+        	{
+        		strout(0x54, (unsigned char*) "ssllib");
+        		gpsstate = 1;
+        	}
+        	else if (temp_recv == 0x5d)
+        	{
+        		strout(0x54, (unsigned char*) "parksi");
+        		gpsstate = 2;
         	}
         }
         
@@ -297,12 +325,32 @@ int main(void) {
         	
         	
         	if (rf_gps == 1) {
+
+        		if (gpsstate == 0)
+        		{
+        			PEER_LAT = LEAVEY_LAT;
+        			PEER_LONG = LEAVEY_LONG;
+        		}
+        		else if (gpsstate == 1)
+        		{
+        			PEER_LAT = SSL_LAT;
+        			PEER_LONG = SSL_LONG;
+        		}
+        		else if (gpsstate == 2)
+        		{
+        			PEER_LAT = PARK_LAT;
+        			PEER_LONG = PARK_LONG;
+        		}
+
         		gps_data[count] = '\0';
         		parse_gps();
         		find_direction();
         		distance = convert_to_distance();
         		char dist_c[15];
-        		snprintf(dist_c, 15, "Dt:%4.1fm", distance);
+        		if (distance < 100)
+        			snprintf(dist_c, 15, "Dt:%4.1fm ", distance);
+        		if (distance >= 100)
+        			snprintf(dist_c, 15, "Dt:%4.1fm", distance);
         		strout(0x00, (unsigned char *) dist_c);
         		strout(0x44, (unsigned char *) direction);
         	}
@@ -425,6 +473,7 @@ ISR(PCINT1_vect)
 		messagestate = 2;
 	}
 	else if (buttonpressed == 0 && emergencystate == 0 && (PINC & 0x10) == 0x00) {
+		messagestate = 0;
 		//strout(0x14, (unsigned char*) "Emergency!");
 		buzzerstate = 1;
 		emergencystate = 1;
